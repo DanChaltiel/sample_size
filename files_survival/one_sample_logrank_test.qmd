@@ -1,11 +1,11 @@
 ---
-title: "Sample size for a Two-Sample Logrank Test"
+title: "Sample size for a One-Sample Logrank Test"
 author: "Dan Chaltiel"
 format: gfm
 editor: visual
 ---
 
-This section addresses methods to compute the total sample size (for a 1:1 randomization) for a two-sample logrank test.
+This section addresses methods to compute the total sample size (for a 1:1 randomization) for a one-sample logrank test.
 
 ## Package `OneArm2stage`
 
@@ -13,56 +13,69 @@ This section addresses methods to compute the total sample size (for a 1:1 rando
 
 ![](https://img.shields.io/badge/nQuery-Untested-blue.svg)
 
-The package `OneArm2stage` allows to compute the sample size for a one-sample logrank test.
+The function `OneArm2stage::Optimal.KJ()` allows to compute the sample size for a one-sample logrank test.
 
-During arms creation, the `size` parameter is irrelevant and any value\>0 will yield the same results. Survival and dropout are modelized using a Weibull distribution with default shape of 1 (exponential distribution). See `?npsurvSS::create_arm` for more information.
+In the following example, we consider an exponential distribution (`dist="WB", shape=1`) with a theoric survival of 25% at t=12 (`S0=0.25, x0=12`), a minimal followup time of `tf=12`, an accrual rate of 6 patient per time unit, the hazard ratio to be proven being `hr=0.7`.
 
 ```{r}
-library(OneArm2stage)
-
-arm0 = create_arm(size=1, accr_time=6, follow_time=12, 
-                  surv_scale=0.05, loss_scale=0)
-arm1 = create_arm(size=1, accr_time=6, follow_time=12, 
-                  surv_scale=0.03, loss_scale=0)
-size_two_arm(arm0, arm1, alpha=0.025, sides=1, power=0.8)
+x = OneArm2stage::Optimal.KJ(dist="WB", shape=1, S0=0.25, x0=12, 
+                             tf=12, rate=6, 
+                             hr=0.7, alpha=0.05, beta=0.1)
 
 ```
 
-### Validation
+The output contains 3 dataframes: the input parameters, the sample size for a one-stage design, and the sample size for a two-stage design.
 
-The power can be found using F. Harrell's `cpower()` function:
+The one-stage design contains the sample size `nsingle`, the accrual time `tasingle`, and the critical value `csingle`:
 
 ```{r}
-tref=10 #arbitraty, works for any value >0
-mortality_c = 1-exp(-0.03*tref)
-mortality_i = 1-exp(-0.05*tref)
-r = 100*(1-mortality_i/mortality_c)
-Hmisc::cpower(tref=tref, n=276, mc=mortality_c, r=r, accrual=6, tmin=12, 
-              alpha=0.05, pr=FALSE) #2-sided alpha
+x$Single_stage
 ```
+
+The two-stage design contains the sample size for the interim and final analyses `n1` and `n`, the critical values `c1` and `c`, the interim analysis time `t1`, the maximum total study length `MTSL`, the expected sample size under H0 `ES`, and the probability or early stopping underh H0 `PS`:
+
+```{r}
+x$Two_stage
+```
+
+See `help(OneArm2stage::Optimal.KJ)` for more details.
 
 ### Grid search
 
-The following example considers a difference between a control arm with a 3-year PFS of 50% and an experimental arm with a 3-year PFS of 70%.
+The following example uses `expand_grid()` to calculate the sample size for an abitrary number of scenarios.
 
-It uses `expand_grid()` to calculate the sample size for an abitrary number of scenarios of accrual/follow-up time, alpha, and power.
+However,
+
+-   `OneArm2stage::Optimal.KJ()` is very verbose (all iterations are printed) so we will apply `purrr::quietly()` to mute it
+
+-   `OneArm2stage::Optimal.KJ()` is also very long (each call takes about a minute) so we will apply `memoise::memoise()` to cache every result on the disk.
 
 ```{r}
+#| message: false
 library(tidyverse)
-pfs3y_ctl = 0.5
-pfs3y_exp = 0.7
-rslt = expand_grid(accrual=3:5, followup=2:3,
-                   alpha=c(0.1, 0.2),
-                   power=c(0.8, 0.9)) %>%
+
+quiet_kj = purrr::quietly(OneArm2stage::Optimal.KJ)
+compute_kj = memoise::memoise(function(...) quiet_kj(...)$result, 
+                              cache=cachem::cache_disk("../cache/OneArm2stage"))
+
+x = expand_grid(accrual=c(5,7), 
+                followup=c(6,12), 
+                alpha=c(0.05, 0.1), 
+                beta=c(0.2,0.3)) %>% 
   rowwise() %>% 
   mutate(tbl = {
-    arm0 = create_arm(size=1, accr_time=accrual, follow_time=followup, 
-                      surv_scale=-log(pfs3y_ctl)/3, loss_scale=0.005)
-    arm1 = create_arm(size=1, accr_time=accrual, follow_time=followup, 
-                      surv_scale=-log(pfs3y_exp)/3, loss_scale=0.005)
-    as_tibble_row(size_two_arm(arm0, arm1, alpha=alpha, sides=2, power=power))
+    # cli::cat_line(cur_group_id(), "/", n_groups(.))
+    d = compute_kj(dist="WB", shape=1, S0=0.30, x0=12, hr=0.7, tf=followup,
+                   rate=accrual, alpha=alpha, beta=beta)
+    d$Two_stage
   }) %>% 
   unpack(tbl)
 
-rslt
+x
 ```
+
+NB: Using RStudio's background jobs has been very useful for this project!
+
+### References
+
+Wu, J, Chen L, Wei J, Weiss H, Chauhan A. (2020). Two-stage phase II survival trial design. Pharmaceutical Statistics. 2020;19:214-229. https://doi.org/10.1002/pst.1983
