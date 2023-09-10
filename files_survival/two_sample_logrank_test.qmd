@@ -7,7 +7,7 @@ editor: visual
 
 This section addresses methods to compute the total sample size (for a 1:1 randomization) for a two-sample logrank test.
 
-## Package `npsurvSS` 
+## Package `npsurvSS`
 
 ![](https://img.shields.io/badge/East-Untested-blue.svg)
 
@@ -49,6 +49,7 @@ The following example considers a difference between a control arm with a 3-year
 It uses `expand_grid()` to calculate the sample size for an abitrary number of scenarios of accrual/follow-up time, alpha, and power.
 
 ```{r}
+#| message: false
 library(tidyverse)
 pfs3y_ctl = 0.5
 pfs3y_exp = 0.7
