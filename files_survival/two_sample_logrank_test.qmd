@@ -7,7 +7,7 @@ editor: visual
 
 This section addresses methods to compute the total sample size (for a 1:1 randomization) for a two-sample logrank test.
 
-## Package `npsurvSS`
+## Sample size: Package `npsurvSS`
 
 ![](https://img.shields.io/badge/East-Untested-blue.svg)
 
@@ -18,7 +18,6 @@ The package `npsurvSS` allows to compute the sample size for a logrank test.
 During arms creation, the `size` parameter is irrelevant and any value\>0 will yield the same results. Survival and dropout are modelized using a Weibull distribution with default shape of 1 (exponential distribution). See `?npsurvSS::create_arm` for more information.
 
 ```{r}
-
 library(npsurvSS)
 
 arm0 = create_arm(size=1, accr_time=6, follow_time=12, 
@@ -26,20 +25,6 @@ arm0 = create_arm(size=1, accr_time=6, follow_time=12,
 arm1 = create_arm(size=1, accr_time=6, follow_time=12, 
                   surv_scale=0.03, loss_scale=0)
 size_two_arm(arm0, arm1, alpha=0.025, sides=1, power=0.8)
-
-```
-
-### Validation
-
-The power can be found using F. Harrell's `cpower()` function:
-
-```{r}
-tref=10 #arbitraty, works for any value >0
-mortality_c = 1-exp(-0.03*tref)
-mortality_i = 1-exp(-0.05*tref)
-r = 100*(1-mortality_i/mortality_c)
-Hmisc::cpower(tref=tref, n=276, mc=mortality_c, r=r, accrual=6, tmin=12, 
-              alpha=0.05, pr=FALSE) #2-sided alpha
 ```
 
 ### Grid search
@@ -67,4 +52,52 @@ rslt = expand_grid(accrual=3:5, followup=2:3,
   unpack(tbl)
 
 rslt
+```
+
+## Power calculation: package `Hmisc`
+
+The power can be found using F. Harrell's `Hmisc::cpower()` function.
+
+However, the interface if not very easy to use, so I use the following wrapper.
+
+```{r}
+#' Power of Cox/log-rank Two-Sample Test 
+#'
+#' @description
+#' Wrapper around [Hmisc::cpower()]
+#'
+#'
+#' @param tref time of reference
+#' @param surv_ctl,surv_exp survival at time `tref` in the control/experimental arm
+#' @param n_ctl,n_exp sample size in the control/experimental arm
+#' @param dropout proportion of non-compliants
+#' @param alpha type I error probability (2-sided)
+#' @param verbose whether to print informations
+#' @param ... passed on to `Hmisc::cpower()`
+#' 
+#' @author Dan Chaltiel
+logrank_power = function(tref, surv_ctl, surv_exp, 
+                         n_ctl, n_exp, accrual, tmin,
+                         dropout=0, alpha=0.05, verbose=TRUE, ...){
+  mortality_c = 1-surv_ctl
+  mortality_i = 1-surv_exp
+  dropout=100*dropout
+  r = 100*(1-mortality_i/mortality_c)
+  Hmisc::cpower(tref, nc=n_ctl, ni=n_exp, mc=mortality_c, r=r, 
+                accrual=accrual, tmin=tmin, noncomp.c=dropout, 
+                noncomp.i=dropout, alpha=alpha, pr=verbose, ...)
+}
+```
+
+In our previous example with scale 0.03 versus 0.05, we found a total sample size of 276, so here we can find our 80% power back:
+
+```{r}
+tref=10 #arbitraty, works for any value >0 
+surv_ctl = exp(-0.03*tref) 
+surv_exp = exp(-0.05*tref)
+
+logrank_power(tref, surv_ctl, surv_exp, 
+              n_ctl=276/2, n_exp=276/2, accrual=6, tmin=12,
+              dropout=0, alpha=0.05, verbose=FALSE)
+
 ```

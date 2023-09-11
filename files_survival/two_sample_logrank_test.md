@@ -4,7 +4,7 @@ Dan Chaltiel
 This section addresses methods to compute the total sample size (for a
 1:1 randomization) for a two-sample logrank test.
 
-## Package `npsurvSS`
+## Sample size: Package `npsurvSS`
 
 ![](https://img.shields.io/badge/East-Untested-blue.svg)
 
@@ -30,22 +30,6 @@ size_two_arm(arm0, arm1, alpha=0.025, sides=1, power=0.8)
 
            n0        n1         n        d0        d1         d 
     137.66566 137.66566 275.33133  72.39288  49.76761 122.16049 
-
-### Validation
-
-The power can be found using F. Harrell’s `cpower()` function:
-
-``` r
-tref=10 #arbitraty, works for any value >0
-mortality_c = 1-exp(-0.03*tref)
-mortality_i = 1-exp(-0.05*tref)
-r = 100*(1-mortality_i/mortality_c)
-Hmisc::cpower(tref=tref, n=276, mc=mortality_c, r=r, accrual=6, tmin=12, 
-              alpha=0.05, pr=FALSE) #2-sided alpha
-```
-
-        Power 
-    0.7931923 
 
 ### Grid search
 
@@ -89,3 +73,55 @@ rslt
      9       4        2   0.1   0.8  59.6  59.6 119.   34.8  22.0  56.7
     10       4        2   0.1   0.9  82.7  82.7 165.   48.3  30.5  78.8
     # i 14 more rows
+
+## Power calculation: package `Hmisc`
+
+The power can be found using F. Harrell’s `Hmisc::cpower()` function.
+
+However, the interface if not very easy to use, so I use the following
+wrapper.
+
+``` r
+#' Power of Cox/log-rank Two-Sample Test 
+#'
+#' @description
+#' Wrapper around [Hmisc::cpower()]
+#'
+#'
+#' @param tref time of reference
+#' @param surv_ctl,surv_exp survival at time `tref` in the control/experimental arm
+#' @param n_ctl,n_exp sample size in the control/experimental arm
+#' @param dropout proportion of non-compliants
+#' @param alpha type I error probability (2-sided)
+#' @param verbose whether to print informations
+#' @param ... passed on to `Hmisc::cpower()`
+#' 
+#' @author Dan Chaltiel
+logrank_power = function(tref, surv_ctl, surv_exp, 
+                         n_ctl, n_exp, accrual, tmin,
+                         dropout=0, alpha=0.05, verbose=TRUE, ...){
+  mortality_c = 1-surv_ctl
+  mortality_i = 1-surv_exp
+  dropout=100*dropout
+  r = 100*(1-mortality_i/mortality_c)
+  Hmisc::cpower(tref, nc=n_ctl, ni=n_exp, mc=mortality_c, r=r, 
+                accrual=accrual, tmin=tmin, noncomp.c=dropout, 
+                noncomp.i=dropout, alpha=alpha, pr=verbose, ...)
+}
+```
+
+In our previous example with scale 0.03 versus 0.05, we found a total
+sample size of 276, so here we can find our 80% power back:
+
+``` r
+tref=10 #arbitraty, works for any value >0 
+surv_ctl = exp(-0.03*tref) 
+surv_exp = exp(-0.05*tref)
+
+logrank_power(tref, surv_ctl, surv_exp, 
+              n_ctl=276/2, n_exp=276/2, accrual=6, tmin=12,
+              dropout=0, alpha=0.05, verbose=FALSE)
+```
+
+        Power 
+    0.7931923 
