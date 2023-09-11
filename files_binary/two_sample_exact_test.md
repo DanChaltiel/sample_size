@@ -157,20 +157,6 @@ might be a better choice for starters.
 
 ``` r
 library(tidyverse)
-```
-
-    -- Attaching core tidyverse packages ------------------------ tidyverse 2.0.0 --
-    v dplyr     1.1.2     v readr     2.1.4
-    v forcats   1.0.0     v stringr   1.5.0
-    v ggplot2   3.4.2     v tibble    3.2.1
-    v lubridate 1.9.2     v tidyr     1.3.0
-    v purrr     1.0.1     
-    -- Conflicts ------------------------------------------ tidyverse_conflicts() --
-    x dplyr::filter() masks stats::filter()
-    x dplyr::lag()    masks stats::lag()
-    i Use the conflicted package (<http://conflicted.r-lib.org/>) to force all conflicts to become errors
-
-``` r
 expand_grid(p=list(c(.35,.50), c(.35,.55), c(.60,.75), c(.60,.80)),
             power=c(0.8, 0.9)) %>%
   mutate(tbl = map2(p, power, ~{

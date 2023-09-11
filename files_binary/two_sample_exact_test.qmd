@@ -129,6 +129,7 @@ Base R function `stats::power.prop.test()` gives results very close to but a bit
 However, it is much faster, as the following code is nearly instantaneous. If you have a lot of scenarios to consider, this method might be a better choice for starters.
 
 ```{r}
+#| message: false
 library(tidyverse)
 expand_grid(p=list(c(.35,.50), c(.35,.55), c(.60,.75), c(.60,.80)),
             power=c(0.8, 0.9)) %>%
