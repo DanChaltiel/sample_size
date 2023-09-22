@@ -8,9 +8,9 @@
 
  - Two-Sample log-rank Test: [link](files_survival/two_sample_logrank_test.md)
 
- - Two-Sample Stratified log-rank Test: [link](files_survival/two_sample_logrank_test.md)
+ - Two-Sample Stratified log-rank Test: [link](files_survival/two_sample_logrank_test_stratif.md)
  
- - Two-Sample Log-Rank Test Group-sequential Design
+ - Two-Sample Log-Rank Test Group-sequential Design: [link](files_survival/two_sample_logrank_test_gs.md)
 
  - One-Sample Log-Rank Test (One-Stage or Two-Stage): [link](files_survival/one_sample_logrank_test.md)
 
