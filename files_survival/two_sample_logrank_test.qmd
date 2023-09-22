@@ -9,48 +9,64 @@ This section addresses methods to compute the total sample size (for a 1:1 rando
 
 ## Sample size: Package `npsurvSS`
 
-![](https://img.shields.io/badge/East-Untested-blue.svg)
+![](https://img.shields.io/badge/East-Validated-green.svg)
 
 ![](https://img.shields.io/badge/nQuery-Untested-blue.svg)
 
 The package `npsurvSS` allows to compute the sample size for a logrank test.
 
-During arms creation, the `size` parameter is irrelevant and any value\>0 will yield the same results. Survival and dropout are modelized using a Weibull distribution with default shape of 1 (exponential distribution). See `?npsurvSS::create_arm` for more information.
+Here is a simple wrapper around `npsurvSS::size_two_arm()`:
 
 ```{r}
-library(npsurvSS)
+samplesize_surv = function(surv_ctl, surv_exp, surv_time, 
+                           accr_time, follow_time, 
+                           ratio=1, loss_scale=0,
+                           alpha=0.05, sides=2, power=0.8){ 
+  arm0 = npsurvSS::create_arm(size=1, 
+                              accr_time=accr_time, follow_time=follow_time, 
+                              surv_scale=-log(surv_exp)/surv_time, 
+                              loss_scale=loss_scale)
+  arm1 = npsurvSS::create_arm(size=ratio, 
+                              accr_time=accr_time, follow_time=follow_time, 
+                              surv_scale=-log(surv_ctl)/surv_time, 
+                              loss_scale=loss_scale)
+  npsurvSS::size_two_arm(arm0, arm1, alpha=alpha, sides=sides, power=power) |> 
+    setNames(c("N_exp", "N_ctl", "N_tot", "E_exp", "E_ctl", "E_tot")) |> 
+    ceiling()
+}
 
-arm0 = create_arm(size=1, accr_time=6, follow_time=12, 
-                  surv_scale=0.05, loss_scale=0)
-arm1 = create_arm(size=1, accr_time=6, follow_time=12, 
-                  surv_scale=0.03, loss_scale=0)
-size_two_arm(arm0, arm1, alpha=0.025, sides=1, power=0.8)
+#3y-survival of 61% versus 49%
+samplesize_surv(surv_ctl=0.49, surv_exp=0.61, surv_time=3, 
+                accr_time=3, follow_time=1.5, 
+                alpha=0.05, sides=2, power=0.9) 
+
+
+#Same design using East v6.4: 
+c(N_exp=355, N_ctl=354, N_tot=709, E_exp=137, E_ctl=176, E_tot=313)
 ```
 
 ### Grid search
 
-The following example considers a difference between a control arm with a 3-year PFS of 50% and an experimental arm with a 3-year PFS of 70%.
+The following example considers a difference between a control arm with a 3-year PFS of 50% and an experimental arm with a 3-year PFS of 70%. The dropout was estimated exponential, with 1.5% patients missing after 3 years.
 
 It uses `expand_grid()` to calculate the sample size for an abitrary number of scenarios of accrual/follow-up time, alpha, and power.
 
 ```{r}
 #| message: false
 library(tidyverse)
-pfs3y_ctl = 0.5
-pfs3y_exp = 0.7
+loss_scale = -log(0.985)/3
+
 rslt = expand_grid(accrual=3:5, followup=2:3,
                    alpha=c(0.1, 0.2),
                    power=c(0.8, 0.9)) %>%
   rowwise() %>% 
   mutate(tbl = {
-    arm0 = create_arm(size=1, accr_time=accrual, follow_time=followup, 
-                      surv_scale=-log(pfs3y_ctl)/3, loss_scale=0.005)
-    arm1 = create_arm(size=1, accr_time=accrual, follow_time=followup, 
-                      surv_scale=-log(pfs3y_exp)/3, loss_scale=0.005)
-    as_tibble_row(size_two_arm(arm0, arm1, alpha=alpha, sides=2, power=power))
+    samplesize_surv(surv_ctl=0.5, surv_exp=0.7, surv_time=3, loss_scale=loss_scale,
+                    accr_time=accrual, follow_time=followup,
+                    alpha=alpha, sides=2, power=power) |>
+      as_tibble_row()
   }) %>% 
   unpack(tbl)
-
 rslt
 ```
 
@@ -89,15 +105,11 @@ logrank_power = function(tref, surv_ctl, surv_exp,
 }
 ```
 
-In our previous example with scale 0.03 versus 0.05, we found a total sample size of 276, so here we can find our 80% power back:
+In our previous example with 3y-survival of 61% versus 49%, we found a total sample size of 709, so here we can find our 90% power back:
 
 ```{r}
-tref=10 #arbitraty, works for any value >0 
-surv_ctl = exp(-0.03*tref) 
-surv_exp = exp(-0.05*tref)
-
-logrank_power(tref, surv_ctl, surv_exp, 
-              n_ctl=276/2, n_exp=276/2, accrual=6, tmin=12,
+logrank_power(tref=3, surv_ctl=0.49, surv_exp=0.61, 
+              n_ctl=709/2, n_exp=709/2, accrual=3, tmin=1.5,
               dropout=0, alpha=0.05, verbose=FALSE)
 
 ```
