@@ -10,6 +10,8 @@ This section addresses methods to compute the total sample size (for a
 
 ![](https://img.shields.io/badge/nQuery-Untested-blue.svg)
 
+WIP: nQuery gives estimates lower than the ones calculated here.
+
 The package `npsurvSS` allows to compute the sample size for a logrank
 test.
 
