@@ -17,4 +17,6 @@
 
 ## Binary outcome
 
+ - Simons's Two-stage Design ([link](files_binary/simon.md))
+ 
  - Two-sample Exact Test ([link](files_binary/two_sample_exact_test.md))
