@@ -1,0 +1,92 @@
+---
+title: "A'Hern design for a 1-sample Test"
+author: "Dan Chaltiel"
+format: gfm
+editor: visual
+---
+
+This section addresses methods to compute the sample size for a single-stage one-sample A'Hern design.
+
+## Custom function
+
+![](https://img.shields.io/badge/Validation-TODO-blue.svg)
+
+The following function is an implementation of the [A'Hern design](https://stat.ethz.ch/education/semesters/as2012/bio/ahernSampleSize.pdf).
+
+```{r}
+#' Compute exact single-stage sample size using A'Hern's design
+#'
+#' This function computes the optimal sample size `n` and decision threshold `r`
+#' for a single-stage phase II design based on A'Hern (2001), using the exact
+#' binomial distribution. 
+#'
+#' @param p0 Numeric. The unacceptable response rate under the null hypothesis (H0).
+#' @param p1 Numeric. The desirable minimal response rate under the alternative hypothesis (H1).
+#' @param alpha Numeric. One-sided type I error rate. 
+#' @param power Numeric. Desired statistical power (1 - type II error). 
+#' @param n_min,n_max Integer. Minimum & maximum sample size to consider. 
+#' @param tolerance Numeric. Acceptable numerical slack for comparison of alpha and power. Default is 0.001.
+#'
+#' @references
+#' A’Hern RP. Sample size tables for exact single-stage phase II designs. Stat Med. 2001;20(6):859–866.
+#' https://stat.ethz.ch/education/semesters/as2012/bio/ahernSampleSize.pdf
+sample_size_ahern = function(p0, p1, alpha=0.05, power=0.8, 
+                             n_min=1, n_max=200, 
+                             tolerance=0.001) {
+  stopifnot(p0<p1)
+  rtn = tidyr::expand_grid(n = n_min:n_max,
+                    r = 0:n_max) |>
+    dplyr::filter(r <= n) |>
+    dplyr::mutate(
+      alpha_real = 1 - pbinom(r - 1, size = n, prob = p0),
+      power_real = 1 - pbinom(r - 1, size = n, prob = p1),
+    ) |>
+    dplyr::filter(alpha_real <= alpha+tolerance, 
+                  power_real >= power-tolerance) |>
+    dplyr::slice_min(r, by=n) |>
+    dplyr::slice_min(n) |>
+    as.data.frame()
+  if(nrow(rtn)==0) {
+    warning("Increase `n_max` ", 
+            "p0=", p0, ", p1=",p1, ", alpha=",alpha, ", power=",power)
+  }
+  rtn
+}
+```
+
+### One-line example
+
+The function outputs a dataframe with input probabilities and alpha, the actual attained power, and the total sample size. Each arm will therefore hold `n_total/2` patients.
+
+```{r}
+sample_size_ahern(p0=0.35, p1=0.55, alpha=0.05, power=0.8)
+sample_size_ahern(p0=0.15, p1=0.3, alpha=0.1, power=0.9)
+```
+
+### Grid search
+
+This example uses `expand_grid()` to calculate the sample size for an abitrary number of scenarios.
+
+```{r}
+#| message: false
+#| warning: false
+library(tidyverse)
+rslt = expand_grid(p0=c(0.5,0.6),
+                   p1=c(0.7,0.8),
+                   power=c(0.8, 0.9)
+) %>%
+  filter(p0<p1) %>% 
+  rowwise() %>% 
+  mutate(tbl = list(sample_size_ahern(p0=p0, p1=p1, power=power))) %>% 
+  unnest(tbl)
+rslt
+```
+
+### Tolerance
+
+As you can see, the real type I error rate can be slightly higher than 5%. Use the `tolerance` argument if you need to be strict:
+
+```{r}
+sample_size_ahern(p0=0.6, p1=0.7, alpha=0.05, power=0.9)
+sample_size_ahern(p0=0.6, p1=0.7, alpha=0.05, power=0.9, tolerance=0)
+```
