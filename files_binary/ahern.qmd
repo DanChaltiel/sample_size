@@ -9,7 +9,7 @@ This section addresses methods to compute the sample size for a single-stage one
 
 ## Custom function
 
-![](https://img.shields.io/badge/Validation-TODO-blue.svg)
+![](https://img.shields.io/badge/Validation-95%25-green.svg)
 
 The following function is an implementation of the [A'Hern design](https://stat.ethz.ch/education/semesters/as2012/bio/ahernSampleSize.pdf).
 
@@ -32,7 +32,7 @@ The following function is an implementation of the [A'Hern design](https://stat.
 #' https://stat.ethz.ch/education/semesters/as2012/bio/ahernSampleSize.pdf
 sample_size_ahern = function(p0, p1, alpha=0.05, power=0.8, 
                              n_min=1, n_max=200, 
-                             tolerance=0.001) {
+                             tolerance=0.00005) {
   stopifnot(p0<p1)
   rtn = tidyr::expand_grid(n = n_min:n_max,
                     r = 0:n_max) |>
@@ -84,9 +84,67 @@ rslt
 
 ### Tolerance
 
-As you can see, the real type I error rate can be slightly higher than 5%. Use the `tolerance` argument if you need to be strict:
+As you can see, the real type I error rate can be slightly higher than 5%, as in the princeps article. Use the `tolerance` argument if you need to be strict:
 
 ```{r}
 sample_size_ahern(p0=0.6, p1=0.7, alpha=0.05, power=0.9)
 sample_size_ahern(p0=0.6, p1=0.7, alpha=0.05, power=0.9, tolerance=0)
+```
+
+## Validation
+
+By scraping the article, we can validate that the calculation is correct.
+
+The article used MS Excel BINOMDIST function to compute the probabilities, which admittedly failed for large N and was then replaced by a normal approximation. As it never fails in R, this approximation was not implemented. Most differences are very likely to come from this fact.
+
+The other difference is the `tolerance` argument. In the original article, `alpha_real` and `power_real` seem to be rounded, but this is not detailled. Differences in smaller N can be
+
+```{r}
+ahern_table = read_lines("ahern_table.txt") %>% 
+  as_tibble_col() %>% 
+  separate_wider_delim (value, 
+                        names=c("p0", "p1", "a0.05_p0.8", "a0.05_p0.9", 
+                                "a0.01_p0.8", "a0.01_p0.9"),
+                        too_few = "align_end",
+                        delim=" ") %>% 
+  filter(!is.na(p1)) %>% 
+  fill(p0, .direction="down") %>% 
+  pivot_longer(-c(p0, p1), names_to=c("alpha", "power"), names_pattern="a(.*)_p(.*)") %>% 
+  separate(value, into=c("r", "n"), sep="=") %>% 
+  mutate_all(as.numeric)
+
+comparison = ahern_table %>% 
+  rowwise() %>%
+  mutate(
+    ah = list(sample_size_ahern(p0=p0, p1=p1, alpha=alpha, power=power, n_min=n-15, n_max=n+15,
+                                tolerance=0.00005) %>% suppressWarnings())
+  ) %>% 
+  unnest(ah, names_sep="_", keep_empty=TRUE) %>% 
+  mutate(diff_n = ah_n-n, diff_r = ah_r-r)
+```
+
+Sample sizes are the same in \>95% cases:
+
+```{r}
+comparison %>% 
+  summarise(
+    prop_correct__n = mean(!is.na(diff_n) & diff_n==0),
+    prop_correct__r = mean(!is.na(diff_r) & diff_r==0),
+    mean_diff__n = mean(diff_n[diff_n!=0], na.rm=TRUE),
+    mean_diff__r = mean(diff_r[diff_r!=0], na.rm=TRUE)
+  ) %>% 
+  pivot_longer(everything(), names_sep="__", names_to=c("variable", ".value"))
+```
+
+Here are the cases with a difference:
+
+```{r}
+comparison %>% 
+  arrange(desc(pmax(diff_n, diff_r))) %>% 
+  filter(diff_n!=0 | diff_r!=0 | is.na(diff_n) | is.na(diff_r)) %>% 
+  print(n=Inf)
+
+#differences in small N are due to rounding
+sample_size_ahern(p0=0.05, p1=0.15, alpha=0.05, power=0.9,
+                  tolerance=0.0005)
 ```
